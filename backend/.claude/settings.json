@@ -1,0 +1,28 @@
+{
+  "project": {
+    "name": "Notes App Backend",
+    "type": "rest-api",
+    "framework": "nestjs",
+    "language": "typescript"
+  },
+  "conventions": {
+    "moduleNaming": "PascalCase",
+    "fileNaming": "kebab-case",
+    "database": "PostgreSQL with TypeORM",
+    "validation": "class-validator decorators",
+    "architecture": "Module-based (Controller, Service, Entity pattern)"
+  },
+  "paths": {
+    "modules": "src/",
+    "entities": "src/*/entities",
+    "dto": "src/*/dto",
+    "controllers": "src/*/",
+    "services": "src/*/"
+  },
+  "database": {
+    "type": "postgres",
+    "orm": "typeorm",
+    "synchronize": true,
+    "entities": ["src/**/entities/*.entity.ts"]
+  }
+}
