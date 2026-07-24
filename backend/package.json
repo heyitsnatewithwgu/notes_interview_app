@@ -7,7 +7,11 @@
     "start": "ts-node -r tsconfig-paths/register src/main.ts",
     "start:dev": "nodemon --watch src --ext ts --exec 'ts-node -r tsconfig-paths/register src/main.ts'",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:unit": "jest --testPathPattern \"src/.*\\.spec\\.ts$\"",
+    "test:e2e": "jest --testPathPattern \"test/.*\\.e2e-spec\\.ts$\"",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "keywords": [],
   "author": "",
@@ -28,9 +32,17 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",
+    "@nestjs/testing": "^11.1.28",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.14",
     "@types/node": "^25.1.0",
+    "@types/supertest": "^6.0.3",
+    "better-sqlite3": "^11.10.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.11",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"

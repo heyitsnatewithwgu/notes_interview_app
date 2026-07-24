@@ -46,7 +46,7 @@ export class NotesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(@Param('id') id: string) {
-    this.notesService.delete(id);
+  async delete(@Param('id') id: string): Promise<void> {
+    await this.notesService.delete(id);
   }
 }

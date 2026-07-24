@@ -1,0 +1,67 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+  code-quality: write # upload coverage to GitHub Code Quality (feeds the coverage ruleset)
+
+jobs:
+  build:
+    name: Type-check & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+
+  test:
+    name: Unit + E2E tests (coverage)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # No Postgres service needed: the Jest E2E layer runs against in-memory
+    # SQLite (see backend/test/utils/create-test-app.ts). The real Postgres path
+    # is exercised by the Playwright suite in e2e.yml.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Jest with coverage (fails below 70%)
+        run: npm run test:cov
+      - name: Upload coverage to GitHub Code Quality
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: backend/coverage/cobertura-coverage.xml
+          language: TypeScript
+          label: code-coverage/backend

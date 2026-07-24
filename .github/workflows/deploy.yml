@@ -1,0 +1,84 @@
+name: Deploy (OIDC → AWS, stubbed)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        default: dev
+        options: [dev, stage, prod]
+
+# Authenticates to AWS with GitHub OIDC (a short-lived assumed role) — no
+# long-lived access keys / secrets. STUBBED for this demo repo: the AWS steps
+# run only when the `AWS_ROLE_ARN` repository variable is set. Until then the
+# job prints what it *would* do and succeeds, so `main` stays green.
+# To un-stub, see docs/platform/OIDC_DEPLOY.md.
+permissions:
+  id-token: write # required to request the OIDC token from AWS STS
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect AWS wiring
+        id: guard
+        run: |
+          if [ -n "${{ vars.AWS_ROLE_ARN }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Stub deploy::AWS_ROLE_ARN is not set — running in STUB mode (no AWS calls)."
+          fi
+
+      # ---------- Real path (only when AWS is wired) ----------
+      - name: Configure AWS credentials (OIDC)
+        if: steps.guard.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: steps.guard.outputs.configured == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, push images, and roll ECS services
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          docker build -t "$ECR_REGISTRY/notes-backend:$IMAGE_TAG" -t "$ECR_REGISTRY/notes-backend:latest" ./backend
+          docker build --build-arg VITE_API_URL="$VITE_API_URL" \
+            -t "$ECR_REGISTRY/notes-frontend:$IMAGE_TAG" -t "$ECR_REGISTRY/notes-frontend:latest" ./frontend
+          docker push "$ECR_REGISTRY/notes-backend:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/notes-backend:latest"
+          docker push "$ECR_REGISTRY/notes-frontend:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/notes-frontend:latest"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service notes-backend --force-new-deployment
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service notes-frontend --force-new-deployment
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services notes-backend notes-frontend
+
+      # ---------- Stub path (when AWS is NOT wired) ----------
+      - name: Deploy (stub — no AWS configured)
+        if: steps.guard.outputs.configured == 'false'
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "STUB DEPLOY — AWS is intentionally not wired for this demo repo."
+          echo "With OIDC configured (repo variables AWS_ROLE_ARN, AWS_REGION, AWS_ACCOUNT_ID, ECS_CLUSTER), this job would:"
+          echo "  1. Assume \$AWS_ROLE_ARN via GitHub OIDC (id-token: write, no static keys)."
+          echo "  2. Log in to ECR: \$AWS_ACCOUNT_ID.dkr.ecr.\$AWS_REGION.amazonaws.com"
+          echo "  3. Build & push notes-backend:$IMAGE_TAG and notes-frontend:$IMAGE_TAG (+ :latest)."
+          echo "  4. Roll ECS services notes-backend and notes-frontend (--force-new-deployment) and wait for stable."
+          echo "See docs/platform/OIDC_DEPLOY.md for the full un-stub checklist."
